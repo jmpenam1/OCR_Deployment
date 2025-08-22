@@ -1,3 +1,8 @@
+!pip install streamlit==1.36.0
+!pip install easyocr==1.7.1
+!pip install torch==2.2.2 torchvision==0.17.2
+!pip install transformers==4.42.4
+
 import streamlit as st
 import easyocr
 import re
