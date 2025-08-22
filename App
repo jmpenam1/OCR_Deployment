@@ -1,0 +1,46 @@
+import streamlit as st
+import pytesseract
+from PIL import Image
+import re
+
+st.set_page_config(page_title="Extractor de Facturas", layout="centered")
+
+st.title("📄 Prototipo: Extracción de datos de Factura")
+st.write("Sube una foto de una factura y el sistema intentará extraer: **Total, Fecha y Emisor**.")
+
+# Subir imagen
+uploaded_file = st.file_uploader("Cargar factura (imagen)", type=["jpg", "jpeg", "png"])
+
+if uploaded_file:
+    # Mostrar imagen cargada
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Factura cargada", use_column_width=True)
+
+    # OCR con pytesseract
+    text = pytesseract.image_to_string(image, lang="spa")  # español
+    st.subheader("Texto detectado:")
+    st.text(text)
+
+    # Extracción con regex
+    # Buscar fecha (formato dd/mm/aaaa o similar)
+    fecha = re.search(r'(\d{1,2}[/-]\d{1,2}[/-]\d{2,4})', text)
+    fecha = fecha.group(0) if fecha else "No detectada"
+
+    # Buscar total (palabra 'total' + número)
+    total = re.search(r'Total[:\s]*\$?\s*([\d.,]+)', text, re.IGNORECASE)
+    total = total.group(1) if total else "No detectado"
+
+    # Buscar emisor (línea con 'S.A.' o 'LTDA' o 'Empresa')
+    emisor = None
+    for line in text.splitlines():
+        if any(word in line.upper() for word in ["S.A", "LTDA", "EMPRESA", "COMPAÑÍA"]):
+            emisor = line.strip()
+            break
+    if not emisor:
+        emisor = "No detectado"
+
+    # Resultados
+    st.subheader("📊 Datos extraídos")
+    st.write(f"**Emisor:** {emisor}")
+    st.write(f"**Fecha:** {fecha}")
+    st.write(f"**Total:** {total}")
