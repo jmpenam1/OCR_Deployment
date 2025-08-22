@@ -1,7 +1,5 @@
 streamlit==1.36.0
-easyocr==1.7.1
+transformers==4.43.3
 torch==2.2.2
-torchvision==0.17.2
-transformers==4.42.4
-requests==2.32.3
-Pillow==10.3.0
+easyocr==1.7.1
+Pillow==10.4.0
