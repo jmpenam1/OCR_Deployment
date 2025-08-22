@@ -1,5 +1,5 @@
-streamlit
-transformers
-torch
-easyocr
-Pillow
+streamlit==1.36.0
+transformers==4.43.3
+torch==2.2.2
+easyocr==1.7.1
+Pillow==10.4.0
