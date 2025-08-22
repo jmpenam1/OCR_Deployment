@@ -1,67 +1,68 @@
 import streamlit as st
-import pytesseract
-from PIL import Image
-import cv2
-import requests
-import os
+import easyocr
+import re
+from transformers import pipeline
 
-# -----------------------------
-# Configuración inicial
-# -----------------------------
-st.set_page_config(page_title="Factura OCR + LLM", page_icon="🧾", layout="centered")
+# Título de la app
+st.title("📄 OCR + LLM - Facturas Inteligentes")
 
-st.title("🧾 Asistente de Facturas con OCR + LLM")
+# Campo para API Key de Hugging Face
+api_key = st.text_input("🔑 Ingresa tu API Key de Hugging Face", type="password")
 
-# Ingreso de API Key de Hugging Face
-hf_api_key = st.text_input("🔑 Ingresa tu Hugging Face API Key", type="password")
+# Cargador de imagen
+uploaded_file = st.file_uploader("Sube una foto de la factura", type=["png", "jpg", "jpeg"])
 
-# -----------------------------
-# Subida de imagen
-# -----------------------------
-uploaded_file = st.file_uploader("📤 Sube la foto de la factura", type=["jpg", "jpeg", "png"])
+if uploaded_file and api_key:
+    # Inicializar OCR
+    reader = easyocr.Reader(['es', 'en'])
+    results = reader.readtext(uploaded_file.read(), detail=0)
 
-if uploaded_file and hf_api_key:
-    # Leer imagen
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Factura cargada", use_column_width=True)
+    # Concatenar el texto leído
+    extracted_text = "\n".join(results)
 
-    # Convertir a escala de grises y aplicar OCR
-    img_cv = cv2.cvtColor(cv2.imread(uploaded_file.name), cv2.COLOR_BGR2GRAY)
-    text = pytesseract.image_to_string(img_cv, lang="spa")
+    st.subheader("📝 Texto extraído:")
+    st.text(extracted_text)
 
-    st.subheader("📑 Texto detectado (OCR):")
-    st.text(text)
+    # Extraer datos clave con regex simples
+    total = re.search(r'(\$?\s?\d+[\.,]?\d{0,2})', extracted_text)
+    fecha = re.search(r'(\d{2}[/-]\d{2}[/-]\d{2,4})', extracted_text)
+    emisor = re.search(r'(?i)(?:emitido por|factura de|emisor[: ]+)([A-Za-z\s]+)', extracted_text)
 
-    # -----------------------------
-    # Llamada a LLM en Hugging Face
-    # -----------------------------
-    st.subheader("🤖 Resumen del LLM:")
+    datos = {
+        "total": total.group(1) if total else "No encontrado",
+        "fecha": fecha.group(1) if fecha else "No encontrada",
+        "emisor": emisor.group(1).strip() if emisor else "No encontrado"
+    }
 
-    headers = {"Authorization": f"Bearer {hf_api_key}"}
-    llm_model = "mistralai/Mistral-7B-Instruct-v0.2"  # se puede cambiar por otro modelo
-    api_url = f"https://api-inference.huggingface.co/models/{llm_model}"
+    st.subheader("📌 Datos clave encontrados:")
+    st.json(datos)
+
+    # Conectar con un LLM de Hugging Face
+    generator = pipeline(
+        "text-generation",
+        model="tiiuae/falcon-7b-instruct",
+        token=api_key
+    )
 
     prompt = f"""
-    A partir del siguiente texto extraído de una factura, identifica:
-    - Emisor
-    - Fecha
-    - Total
-    Luego genera una breve descripción de la factura en lenguaje natural.
-    
-    Texto OCR:
-    {text}
+    Tengo una factura con la siguiente información extraída por OCR:
+    - Total: {datos['total']}
+    - Fecha: {datos['fecha']}
+    - Emisor: {datos['emisor']}
+
+    Por favor, genera una breve descripción en lenguaje natural.
     """
 
-    with st.spinner("Consultando al modelo..."):
-        response = requests.post(api_url, headers=headers, json={"inputs": prompt})
-        
-        if response.status_code == 200:
-            output = response.json()
-            # Hugging Face puede devolver texto en distintos formatos
-            try:
-                llm_text = output[0]["generated_text"]
-            except:
-                llm_text = output
-            st.write(llm_text)
-        else:
-            st.error(f"Error en la API: {response.status_code} - {response.text}")
+    try:
+        response = generator(prompt, max_length=200, do_sample=True)
+        descripcion = response[0]["generated_text"]
+
+        st.subheader("🧠 Descripción generada por LLM:")
+        st.write(descripcion)
+
+    except Exception as e:
+        st.error(f"Error al conectar con Hugging Face: {e}")
+
+elif uploaded_file and not api_key:
+    st.warning("⚠️ Ingresa tu API Key de Hugging Face para procesar con el LLM.")
+
